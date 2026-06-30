@@ -9,7 +9,7 @@ pipeline {
         stage('Environment Setup') {
             steps {
                 echo 'Dynamically installing Node.js and NPM inside the agent...'
-                sh 'sudo apk add --no-cache nodejs npm'
+                sh 'apk add --no-cache nodejs npm'
             }
         }
 
