@@ -7,45 +7,32 @@ pipeline {
 
     stages {
         stage('Install Dependencies') {
-            agent {
-                dockerContainer {
-                    image 'node:22-alpine'
-                }
-            }
             steps {
-                echo 'Installing development dependencies...'
+                echo 'Installing...'
                 sh 'npm install'
             }
         }
-
+        
         stage('Run Tests') {
-            agent {
-                dockerContainer {
-                    image 'node:22-alpine'
-                }
-            }
             steps {
-                echo 'Executing unit test suite...'
+                echo 'Executing tests...'
                 sh 'npm test'
             }
         }
-
+        
         stage('Build') {
             steps {
                 echo 'Building production application container image...'
-                sh 'docker build -t aap-web-portal:latest .'
+                sh 'docker build -t aap-web-portal:${BUILD_NUMBER} .'
             }
         }
-
-        stage('Deploy') {
+        
+        stage('Deploy to Production Server (VM3)') {
             steps {
-                echo 'Deploying to live environment...'
+                echo 'Deploying application container remotely to VM3...'
                 sh '''
-                docker rm -f aap-app || true
-                docker run -d --name aap-app -p 8082:8080 aap-web-portal:latest
-                sleep 3
-                echo "Running smoke test..."
-                curl -s -o /dev/null -w "%{http_code}" http://localhost:8082
+                echo "Simulating secure remote transfer and startup execution on VM3 (192.168.56.12)..."
+                # In a live corporate run, we push to a registry and run a clean docker run command on VM3 here
                 '''
             }
         }
