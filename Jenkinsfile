@@ -7,30 +7,46 @@ pipeline {
 
     stages {
         stage('Install Dependencies') {
+            agent {
+                docker {
+                    image 'node:22-alpine' 
+                    reuseNode true
+                }
+            }
             steps {
-                echo 'Installing...'
+                echo 'Installing development dependencies...'
                 sh 'npm install'
             }
         }
+
         stage('Run Tests') {
+            agent {
+                docker {
+                    image 'node:22-alpine'
+                    reuseNode true
+                }
+            }
             steps {
-                echo 'Executing tests...'
+                echo 'Executing unit test suite...'
                 sh 'npm test'
             }
         }
+
         stage('Build') {
             steps {
-                echo 'Building production container image...'
+                echo 'Building production application container image...'
                 sh 'docker build -t aap-web-portal:latest .'
             }
         }
+
         stage('Deploy') {
             steps {
-                echo 'Deploying to application stack...'
+                echo 'Deploying to live environment...'
                 sh '''
                 docker rm -f aap-app || true
                 docker run -d --name aap-app -p 8082:8080 aap-web-portal:latest
-                echo "Testing post deployment..."
+                sleep 3
+                echo "Running smoke test..."
                 curl -s -o /dev/null -w "%{http_code}" http://localhost:8082
                 '''
             }
