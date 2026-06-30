@@ -8,9 +8,8 @@ pipeline {
     stages {
         stage('Install Dependencies') {
             agent {
-                docker {
-                    image 'node:22-alpine' 
-                    reuseNode true
+                dockerContainer {
+                    image 'node:22-alpine'
                 }
             }
             steps {
@@ -21,9 +20,8 @@ pipeline {
 
         stage('Run Tests') {
             agent {
-                docker {
+                dockerContainer {
                     image 'node:22-alpine'
-                    reuseNode true
                 }
             }
             steps {
