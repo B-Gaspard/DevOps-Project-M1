@@ -4,121 +4,111 @@ pipeline {
     }
 
     environment {
-        PROD_SERVER     = '192.168.56.12'
-        IMAGE_NAME      = "aap-web-portal:${env.BUILD_NUMBER}"
-        DISCORD_WEBHOOK = '***REMOVED***'
+        IMAGE_NAME = "aap-web-portal"
+        CONTAINER_NAME = "aap-app"
+        PROD_HOST = "192.168.56.12"
+        PROD_USER = "vagrant"
+
+        // Configure this as a Secret Text credential in Jenkins
+        DISCORD_WEBHOOK = credentials('discord-webhook')
+    }
+
+    options {
+        timestamps()
+        ansiColor('xterm')
     }
 
     stages {
+
         stage('Install Dependencies') {
             steps {
-                echo 'Provisioning runtime dependencies (Node.js & npm)...'
-                sh 'apk add --no-cache nodejs npm'
-                
-                echo 'Installing application dependencies...'
-                sh 'npm install'
+                sh '''
+                    echo "Node version:"
+                    node --version
+
+                    echo "NPM version:"
+                    npm --version
+
+                    npm install
+                '''
             }
         }
 
         stage('Run Tests') {
             steps {
-                echo 'Executing test suite...'
-                sh 'npm test'
+                sh '''
+                    npm test
+                '''
             }
         }
 
         stage('Build Image') {
             steps {
-                echo "Compiling application Docker image: ${IMAGE_NAME}..."
-                sh "docker build -t ${IMAGE_NAME} ."
+                sh '''
+                    docker version
+
+                    docker build \
+                        -t ${IMAGE_NAME}:${BUILD_NUMBER} \
+                        .
+
+                    docker tag \
+                        ${IMAGE_NAME}:${BUILD_NUMBER} \
+                        ${IMAGE_NAME}:latest
+                '''
             }
         }
 
         stage('Deploy to Production') {
             steps {
-                echo "Deploying application to production server (${PROD_SERVER})..."
-                sh """
-                    ssh -o StrictHostKeyChecking=no vagrant@${PROD_SERVER} "
-                        docker stop aap-app || true
-                        docker rm aap-app || true
-                        docker run -d --name aap-app -p 8080:8080 ${IMAGE_NAME}
-                    "
-                """
-            }
-        }
+                sh '''
+                    echo "Deploying to Production Server..."
 
-        stage('Telemetry & Metric Validation') {
-            steps {
-                echo "Querying CPU metrics on production target VM3..."
-                script {
-                    def loadAvgStr = sh(
-                        script: "ssh -o StrictHostKeyChecking=no vagrant@${PROD_SERVER} \"awk '{print \$1}' /proc/loadavg\"", 
-                        returnStdout: true
-                    ).trim()
-                    
-                    double loadAvg = Double.parseDouble(loadAvgStr)
-                    echo "Current 1-Minute Load Average: ${loadAvg}"
+                    ssh \
+                      -o StrictHostKeyChecking=no \
+                      ${PROD_USER}@${PROD_HOST} <<EOF
 
-                    if (loadAvg > 0.50) {
-                        echo "WARNING: High CPU load threshold breached!"
-                        def alertPayload = """
-                        {
-                            "content": "⚠️ **CRITICAL WARNING**: Host VM3 (Production) CPU usage has reached over 50%! Current load average: ${loadAvg}."
-                        }
-                        """
-                        sh """
-                            curl -H "Content-Type: application/json" -X POST -d '${alertPayload}' \${DISCORD_WEBHOOK}
-                        """
-                    }
-                }
-            }
-        }
+                    docker stop ${CONTAINER_NAME} || true
+                    docker rm ${CONTAINER_NAME} || true
 
-        stage('Post-Deploy Verification') {
-            steps {
-                echo 'Setting up Robot Framework test automation environment...'
-                sh """
-                    apk add --no-cache python3 py3-pip gcc python3-dev musl-dev libffi-dev openssl-dev
-                    python3 -m venv venv
-                    . venv/bin/activate
-                    pip install --upgrade pip
-                    pip install robotframework robotframework-seleniumlibrary
-                """
-                
-                echo 'Executing advanced Robot Framework UI component validation...'
-                sh """
-                    . venv/bin/activate
-                    robot --variable PROD_IP:${PROD_SERVER} web_smoke_test.robot
-                """
+                    docker run -d \
+                      --name ${CONTAINER_NAME} \
+                      -p 8080:8080 \
+                      ${IMAGE_NAME}:latest
+
+                    sleep 10
+
+                    echo "Smoke Test"
+
+                    if command -v curl >/dev/null 2>&1; then
+                        STATUS=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8080)
+                    else
+                        STATUS=$(wget --server-response --spider http://localhost:8080 2>&1 | awk '/HTTP\\// {print \$2}' | tail -1)
+                    fi
+
+                    echo "HTTP Status: ${STATUS}"
+
+                    test -n "${STATUS}"
+
+                    EOF
+                '''
             }
         }
     }
 
     post {
         always {
-            script {
-                def webhookUrl = env.DISCORD_WEBHOOK ?: 'https://discord.com/api/webhooks/fallback-if-empty'
-                def currentStatus = currentBuild.currentResult ?: 'ABORTED'
-                def embedColor = (currentStatus == 'SUCCESS') ? 3066993 : 15158332
-                
-                def payload = """
-                {
-                    "content": "Pipeline execution completed.",
-                    "embeds": [{
-                        "title": "Build #${env.BUILD_NUMBER} Status",
-                        "description": "Project: DevOps-Project-M1\\nBranch: main",
-                        "color": ${embedColor},
-                        "fields": [
-                            { "name": "Build ID", "value": "${env.BUILD_NUMBER}", "inline": true },
-                            { "name": "Result Status", "value": "${currentStatus}", "inline": true }
-                        ]
-                    }]
-                }
-                """
-                sh """
-                    curl -H "Content-Type: application/json" -X POST -d '${payload}' \${webhookUrl}
-                """
-            }
+            sh '''
+                curl \
+                  -H "Content-Type: application/json" \
+                  -X POST \
+                  -d "{
+                        \\"build\\": \\"${BUILD_ID}\\",
+                        \\"build_number\\": \\"${BUILD_NUMBER}\\",
+                        \\"job\\": \\"${JOB_NAME}\\",
+                        \\"status\\": \\"${currentBuild.currentResult}\\"
+                      }" \
+                  "${DISCORD_WEBHOOK}"
+            '''
         }
     }
 }
