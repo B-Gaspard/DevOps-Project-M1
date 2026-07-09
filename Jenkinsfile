@@ -95,12 +95,7 @@ pipeline {
                 def message = "Pipeline Status: ${status} | Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER}\nURL: ${env.BUILD_URL}"
                 
                 withCredentials([string(credentialsId: 'discord-webhook', variable: 'DISCORD_URL')]) {
-                    sh """
-                    curl -H "Content-Type: application/json" \
-                         -X POST \
-                         -d '{"embeds": [{"title": "CI/CD Notification", "description": "${message}", "color": ${color}}]}' \
-                         \${DISCORD_URL}
-                    """
+                    sh "curl -H 'Content-Type: application/json' -X POST -d '{\"embeds\": [{\"title\": \"CI/CD Notification\", \"description\": \"Pipeline Status: FAILURE\", \"color\": 15158332}]}' ${DISCORD_URL}"
                 }
             }
         }
