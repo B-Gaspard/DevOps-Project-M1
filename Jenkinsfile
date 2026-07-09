@@ -88,16 +88,21 @@ pipeline {
     }
 
     post {
-        always {
-            script {
-                def status = currentBuild.currentResult
-                def color = (status == 'SUCCESS') ? 3066993 : 15158332
-                def message = "Pipeline Status: ${status} | Job: ${env.JOB_NAME} | Build: #${env.BUILD_NUMBER}\nURL: ${env.BUILD_URL}"
-                
-                withCredentials([string(credentialsId: 'discord-webhook', variable: 'DISCORD_URL')]) {
-                    sh "curl -H 'Content-Type: application/json' -X POST -d '{\"embeds\": [{\"title\": \"CI/CD Notification\", \"description\": \"Pipeline Status: FAILURE\", \"color\": 15158332}]}' ${DISCORD_URL}"
-                }
+    always {
+        script {
+            
+            def buildColor = (currentBuild.currentResult == 'SUCCESS') ? 3066993 : 15158332
+            def buildStatus = currentBuild.currentResult ?: 'SUCCESS' 
+            
+            withCredentials([string(credentialsId: 'discord-webhook', variable: 'DISCORD_URL')]) {
+                sh """
+                    curl -H "Content-Type: application/json" \
+                    -X POST \
+                    -d '{"embeds": [{"title": "CI/CD Notification", "description": "Pipeline Status: ${buildStatus}", "color": ${buildColor}}]}' \
+                    ${DISCORD_URL}
+                """
             }
         }
     }
+}
 }
