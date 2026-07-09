@@ -88,21 +88,25 @@ pipeline {
     }
 
     post {
-    always {
-        script {
-            
-            def buildColor = (currentBuild.currentResult == 'SUCCESS') ? 3066993 : 15158332
-            def buildStatus = currentBuild.currentResult ?: 'SUCCESS' 
-            
-            withCredentials([string(credentialsId: 'discord-webhook', variable: 'DISCORD_URL')]) {
-                sh """
-                    curl -H "Content-Type: application/json" \
-                    -X POST \
-                    -d '{"embeds": [{"title": "CI/CD Notification", "description": "Pipeline Status: ${buildStatus}", "color": ${buildColor}}]}' \
-                    ${DISCORD_URL}
-                """
+        always {
+            script {
+                
+                sh "rm -f ${APP_NAME}.tar.gz"
+                sh "docker image prune -f"
+                
+                def buildColor = (currentBuild.currentResult == 'SUCCESS') ? 3066993 : 15158332
+                def buildStatus = currentBuild.currentResult ?: 'SUCCESS' 
+                def statusEmoji = (currentBuild.currentResult == 'SUCCESS') ? '🚀 SUCCESS' : '❌ FAILURE'
+                
+                withCredentials([string(credentialsId: 'discord-webhook', variable: 'DISCORD_URL')]) {
+                    sh """
+                        curl -H "Content-Type: application/json" \
+                        -X POST \
+                        -d '{"embeds": [{"title": "CI/CD Notification", "description": "Pipeline Status: ${statusEmoji}\\nJob: ${JOB_NAME}\\nBuild: #${BUILD_NUMBER}", "color": ${buildColor}}]}' \
+                        \${DISCORD_URL}
+                    """
+                }
             }
         }
     }
-}
 }
