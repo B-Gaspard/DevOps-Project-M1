@@ -9,9 +9,11 @@ pipeline {
         DISCORD_WEBHOOK = '***REMOVED***'
     }
 
-    stages {
-        stage('Install Dependencies') {
+    stage('Install Dependencies') {
             steps {
+                echo 'Provisioning runtime dependencies (Node.js & npm)...'
+                sh 'apk add --no-cache nodejs npm'
+                
                 echo 'Installing application dependencies...'
                 sh 'npm install'
             }
