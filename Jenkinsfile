@@ -96,6 +96,9 @@ pipeline {
     post {
         always {
             script {
+                
+                def webhookUrl = env.DISCORD_WEBHOOK ?: 'https://discord.com/api/webhooks/fallback-if-empty'
+                
                 def payload = """
                 {
                     "content": "Pipeline execution completed.",
@@ -105,13 +108,13 @@ pipeline {
                         "color": ${currentBuild.currentResult == 'SUCCESS' ? 3066993 : 15158332},
                         "fields": [
                             { "name": "Build ID", "value": "${env.BUILD_NUMBER}", "inline": true },
-                            { "name": "Result Status", "value": "${currentBuild.currentResult}", "inline": true }
+                            { "name": "Result Status", "value": "${currentBuild.currentResult || 'ABORTED'}", "inline": true }
                         ]
                     }]
                 }
                 """
                 sh """
-                    curl -H "Content-Type: application/json" -X POST -d '${payload}' ${DISCORD_WEBHOOK}
+                    curl -H "Content-Type: application/json" -X POST -d '${payload}' ${webhookUrl}
                 """
             }
         }
