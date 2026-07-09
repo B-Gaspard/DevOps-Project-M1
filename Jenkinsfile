@@ -9,7 +9,8 @@ pipeline {
         DISCORD_WEBHOOK = '***REMOVED***'
     }
 
-    stage('Install Dependencies') {
+    stages {
+        stage('Install Dependencies') {
             steps {
                 echo 'Provisioning runtime dependencies (Node.js & npm)...'
                 sh 'apk add --no-cache nodejs npm'
@@ -50,7 +51,6 @@ pipeline {
             steps {
                 echo "Querying CPU metrics on production target VM3..."
                 script {
-                   
                     def loadAvgStr = sh(
                         script: "ssh -o StrictHostKeyChecking=no vagrant@${PROD_SERVER} \"awk '{print \$1}' /proc/loadavg\"", 
                         returnStdout: true
@@ -59,7 +59,6 @@ pipeline {
                     double loadAvg = Double.parseDouble(loadAvgStr)
                     echo "Current 1-Minute Load Average: ${loadAvg}"
 
-                    
                     if (loadAvg > 0.50) {
                         echo "WARNING: High CPU load threshold breached!"
                         def alertPayload = """
@@ -68,7 +67,7 @@ pipeline {
                         }
                         """
                         sh """
-                            curl -H "Content-Type: application/json" -X POST -d '${alertPayload}' ${DISCORD_WEBHOOK}
+                            curl -H "Content-Type: application/json" -X POST -d '${alertPayload}' \${DISCORD_WEBHOOK}
                         """
                     }
                 }
@@ -98,8 +97,9 @@ pipeline {
     post {
         always {
             script {
-                
                 def webhookUrl = env.DISCORD_WEBHOOK ?: 'https://discord.com/api/webhooks/fallback-if-empty'
+                def currentStatus = currentBuild.currentResult ?: 'ABORTED'
+                def embedColor = (currentStatus == 'SUCCESS') ? 3066993 : 15158332
                 
                 def payload = """
                 {
@@ -107,16 +107,16 @@ pipeline {
                     "embeds": [{
                         "title": "Build #${env.BUILD_NUMBER} Status",
                         "description": "Project: DevOps-Project-M1\\nBranch: main",
-                        "color": ${currentBuild.currentResult == 'SUCCESS' ? 3066993 : 15158332},
+                        "color": ${embedColor},
                         "fields": [
                             { "name": "Build ID", "value": "${env.BUILD_NUMBER}", "inline": true },
-                            { "name": "Result Status", "value": "${currentBuild.currentResult || 'ABORTED'}", "inline": true }
+                            { "name": "Result Status", "value": "${currentStatus}", "inline": true }
                         ]
                     }]
                 }
                 """
                 sh """
-                    curl -H "Content-Type: application/json" -X POST -d '${payload}' ${webhookUrl}
+                    curl -H "Content-Type: application/json" -X POST -d '${payload}' \${webhookUrl}
                 """
             }
         }
